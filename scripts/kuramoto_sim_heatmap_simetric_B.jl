@@ -9,7 +9,7 @@ gr()
 default(fontfamily="Computer Modern", linewidth=2, label=nothing, grid=false, framestyle=:box)
 
 # Base output directory
-base_out_dir = "figures/kuramoto_var_K1_K2"
+base_out_dir = "figures/kuramoto_var_K1_K2_simmetric_Bijk"
 
 # ==============================================================================
 # 1. Dynamical System Definition
@@ -83,14 +83,14 @@ function run_parameter_sweep(N = 20, τ = 0.05)
     B = float.(rand(N, N, N) .< (p_edge)) 
     
     # Symmetrize environmental influence
-    #for i in 1:N, j in 1:N, k in 1:N
-    #    B[i,j,k] = B[i,k,j]
-    #end
+    for i in 1:N, j in 1:N, k in 1:N
+        B[i,j,k] = B[i,k,j]
+    end
 
     # Sweep Grids
     K1_vals = 10.0 .^range(-3, 0, length=11)#range(0.0, 1.0, length=11)
     K2_vals = 10.0 .^range(-3, 0, length=11)#range(0.0, 1.0, length=11)
-
+    
     # Result Matrix
     R_matrix = zeros(length(K1_vals), length(K2_vals))
     
