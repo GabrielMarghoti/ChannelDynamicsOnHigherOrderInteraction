@@ -150,6 +150,7 @@ function run_parameter_sweep(cfg;
     nK2 = length(K2_vals)
 
     R1_matrix = zeros(Float64, nK1, nK2)
+    R15_matrix = zeros(Float64, nK1, nK2)
     R2_matrix = zeros(Float64, nK1, nK2)
 
     println("  -> Grid $(nK1)×$(nK2) | N=$N | p=$p_edge | τ=$τ | sym_B=$sym_B")
