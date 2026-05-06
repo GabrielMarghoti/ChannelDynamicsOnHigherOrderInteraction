@@ -13,17 +13,20 @@ default(fontfamily = "Computer Modern", linewidth = 2, label = nothing,
 # OUTPUT DIRECTORY
 # ==============================================================================
 
-base_out_dir = "figures/kuramoto_cluster_sweep"
+const BASE_OUT_DIR = "figures/kuramoto_cluster_sweep"
 
 # ==============================================================================
 # 1. DYNAMICAL SYSTEM
 # ==============================================================================
-# Full model with latent transmission variable u_{ij}(t):
 #
-#   θ̇_i = ω_i + Σ_j u_{ij}(t) 
+#   θ̇_i  =  ω_i  +  Σ_j u_{ij}(t)                               [Eq. 1]
 #
-#   τ u̇_{ij} = -u_{ij} + K₁ A_{ij} sin(θ_j - θ_i)
-#              + K₂ [ Σ_k B_{ijk} cos(θ_k - θ_i) ] sin(θ_j - θ_i)
+#   τ u̇_{ij}  =  −u_{ij}
+#                + K₁ A_{ij} sin(θ_j − θ_i)
+#                + K₂ [Σ_k B_{ijk} cos(θ_k − θ_i)] sin(θ_j − θ_i)   [Eq. 2]
+#
+# Note: u_{ij} already carries the coupling kernel, so the phase equation
+# sums u directly (no extra sin factor at the θ level).
 # ==============================================================================
 
 function dynamic_kuramoto!(dy, y, p, t)
@@ -31,142 +34,173 @@ function dynamic_kuramoto!(dy, y, p, t)
 
     θ = @view y[1:N]
     u = reshape(@view(y[N+1:end]), N, N)
-
     dθ = @view dy[1:N]
     du = reshape(@view(dy[N+1:end]), N, N)
 
-    # Phase dynamics
+    # --- Phase dynamics [Eq. 1] -----------------------------------------------
     for i in 1:N
         dθ[i] = ω[i]
         for j in 1:N
-            dθ[i] += u[i, j]
+            dθ[i] += u[i, j]         
         end
     end
 
-    # Transmission variable dynamics
+    # --- Transmission variable dynamics [Eq. 2] --------------------------------
     for i in 1:N
         for j in 1:N
             local_field = 0.0
             for k in 1:N
-                if B[i, j, k] != 0.0
-                    local_field += B[i, j, k] * cos(θ[k] - θ[i])
-                end
+                local_field += B[i, j, k] * cos(θ[k] - θ[i])
             end
-            driving = K1 * A[i, j] * sin(θ[j] - θ[i]) + K2 * local_field * sin(θ[j] - θ[i])
+            driving  = (K1 * A[i, j] + K2 * local_field) * sin(θ[j] - θ[i])
             du[i, j] = (-u[i, j] + driving) / τ
         end
     end
 end
 
 # ==============================================================================
-# 2. ORDER PARAMETERS
+# 2. NETWORK GENERATION
 # ==============================================================================
 
-function kuramoto_order(theta; qs=1)
-    N = length(theta)
+function build_network(N::Int, p_edge::Float64, symmetrize_B::Bool, rng::AbstractRNG)
 
-    if isa(qs, Int)
-        q = qs
-        return sum(exp.(im * q .* theta)) / N
-    else
-        z = Dict{Int, ComplexF64}()
-        for q in qs
-            z[q] = sum(exp.(im * q .* theta)) / N
-        end
-        return z
+    # --- Pairwise adjacency A (Erdős–Rényi, no self-loops) --------------------
+    A = zeros(Float64, N, N)
+    for i in 1:N, j in 1:N
+        i != j && rand(rng) < p_edge && (A[i, j] = 1.0)
     end
+
+    # --- Higher-order tensor B (Erdős–Rényi, no degenerate indices) -----------
+    # B[i,j,k] weights how oscillator k modulates the j→i channel.
+    # Forbidden: j==i, k==i, j==k (self-modulation or repeated index).
+    B = zeros(Float64, N, N, N)
+    for i in 1:N, j in 1:N, k in 1:N
+        (i == j || i == k || j == k) && continue
+        rand(rng) < p_edge && (B[i, j, k] = 1.0)
+    end
+
+    # --- Optional symmetrization B_{ijk} = B_{ikj} (enables HOI reduction) ---
+    # Bug-safe: iterate only over j < k (upper triangle) so each pair {j,k}
+    # is visited exactly once. Iterating all (j,k) would cause each assignment
+    # to be immediately overwritten by the symmetric pass.
+    if symmetrize_B
+        for i in 1:N, j in 1:N, k in (j+1):N
+            sym_val     = (B[i, j, k] + B[i, k, j]) / 2.0
+            B[i, j, k]  = sym_val
+            B[i, k, j]  = sym_val
+        end
+    end
+
+    return A, B
 end
 
 # ==============================================================================
-# 3. PARAMETER SWEEP
+# 3. ORDER PARAMETERS
 # ==============================================================================
 
-function run_parameter_sweep(N, τ, symmetrize_B::Bool;
-                              K1_vals, K2_vals,
-                              tspan = (0.0, 150.0),
-                              t_eq  = 75.0,
+# Generalized Kuramoto order parameter R_q:
+#
+#   z_q = (1/N) Σ_j exp(i·q·θ_j),    R_q = |z_q|
+#
+#   q = 1  →  R₁: global synchrony
+#             → 1 when all phases coincide
+#             → 0 when phases are uniformly distributed
+#
+#   q = 2  →  R₂: 2-cluster synchrony (π clusters)
+#             → 1 when oscillators form two groups separated by π
+#             → 0 when phases are uniformly distributed
+#
+# Interpretation of the joint (R₁, R₂) pair:
+#   R₁ ≈ 1, R₂ ≈ 1  →  global synchrony (both modes agree)
+#   R₁ ≈ 0, R₂ ≈ 1  →  pure 2-cluster state
+#   R₁ ≈ 0, R₂ ≈ 0  →  incoherent
+# --------------------------------------------------------------------------
+function order_parameter(θ::AbstractVector{<:Real}, q)
+    return abs(sum(exp.(im * q .* θ)) / length(θ))
+end
+
+# ==============================================================================
+# 4. PARAMETER SWEEP
+# ==============================================================================
+
+"""
+    run_parameter_sweep(cfg; K1_vals, K2_vals, kwargs...)
+
+Sweep K₁ × K₂ for a single configuration tuple
+    cfg = (label, τ, sym_B, N, p_edge)
+Returns `(R1_matrix, R2_matrix)`, each of size `(nK1, nK2)`.
+"""
+function run_parameter_sweep(cfg;
+                              K1_vals,
+                              K2_vals,
+                              tspan     = (0.0, 150.0),
+                              t_eq      = 75.0,
                               saveat_dt = 0.5,
-                              seed = 42)
+                              seed      = 42)
 
-    Random.seed!(seed)
+    label, τ, sym_B, N, p_edge = cfg
 
-    # Natural frequencies ~ N(0, σ_ω²)
-    ω = randn(N) .* 0.1
+    rng = MersenneTwister(seed)
 
-    # Erdős–Rényi topology for A and B
-    p_edge = 1 # 0.3
-    A = float.(rand(N, N) .< p_edge)
-    B = float.(rand(N, N, N) .< p_edge)
-
-    # Remove self-loops
-    for i in 1:N
-        A[i, i] = 0.0
-        for j in 1:N
-            B[i, j, j] = 0.0
-            B[i, i, j] = 0.0
-        end
-    end
-
-    # Optional: symmetrize B_{ijk} = B_{ikj} (adiabatic HOI limit)
-    if symmetrize_B
-        for i in 1:N, j in 1:N, k in 1:N
-            B[i, k, j] = B[i, j, k]
-        end
-    end
+    # Fixed network for this configuration (shared across all K1, K2 points)
+    ω    = randn(rng, N) .* 0.1
+    A, B = build_network(N, p_edge, sym_B, rng)
 
     nK1 = length(K1_vals)
     nK2 = length(K2_vals)
 
-    R_matrix  = zeros(nK1, nK2)   # Kuramoto order parameter
-    Qc_matrix = zeros(nK1, nK2)   # Cluster order parameter
+    R1_matrix = zeros(Float64, nK1, nK2)
+    R2_matrix = zeros(Float64, nK1, nK2)
 
-    println("  -> Grid: $(nK1) × $(nK2)  |  N = $N  |  τ = $τ  |  sym_B = $symmetrize_B")
-
-    rngs = [MersenneTwister(seed + t) for t in 1:Threads.nthreads()]
+    println("  -> Grid $(nK1)×$(nK2) | N=$N | p=$p_edge | τ=$τ | sym_B=$sym_B")
 
     for i in 1:nK1
         K1 = K1_vals[i]
-        rng = rngs[Threads.threadid()]
 
         for j in 1:nK2
             K2 = K2_vals[j]
 
+            # Fresh random initial phases; u starts at rest
             θ0 = rand(rng, N) .* 2π
-            u0 = zeros(N * N)
-            y0 = vcat(θ0, u0)
+            y0 = vcat(θ0, zeros(N * N))
 
-            p = (ω, A, B, K1, K2, τ, N)
+            p    = (ω, A, B, K1, K2, τ, N)
             prob = ODEProblem(dynamic_kuramoto!, y0, tspan, p)
-            sol  = solve(prob, Tsit5(), saveat = saveat_dt,
-                         reltol = 1e-6, abstol = 1e-6, maxiters = 1_000_000)
+            sol  = solve(prob, Tsit5(),
+                         saveat   = saveat_dt,
+                         reltol   = 1e-6,
+                         abstol   = 1e-6,
+                         maxiters = 1_000_000)
 
+            # Time-average over the post-transient window
             eq_idx = findall(t -> t >= t_eq, sol.t)
-
-            R_sum  = 0.0
-            Qc_sum = 0.0
             cnt    = length(eq_idx)
 
+            R1_sum = 0.0
+            R15_sum = 0.0
+            R2_sum = 0.0
             for idx in eq_idx
-                θ_t      = sol.u[idx][1:N]
-                zs = kuramoto_order(θ_t, qs=[1,2])
-                R_sum   += abs(zs[1])
-                Qc_sum  +=  abs(zs[2])
+                θ_t    = sol.u[idx][1:N]
+                R1_sum += order_parameter(θ_t, 1)
+                R15_sum += order_parameter(θ_t, 1.5)
+                R2_sum += order_parameter(θ_t, 2)
             end
 
-            R_matrix[i, j]  = cnt > 0 ? R_sum  / cnt : 0.0
-            Qc_matrix[i, j] = cnt > 0 ? Qc_sum / cnt : 0.0
+            R1_matrix[i, j] = cnt > 0 ? R1_sum / cnt : 0.0
+            R15_matrix[i, j] = cnt > 0 ? R15_sum / cnt : 0.0
+            R2_matrix[i, j] = cnt > 0 ? R2_sum / cnt : 0.0
         end
 
         pct = round(100 * i / nK1, digits = 1)
-        println("  -> K1 = $(round(K1, sigdigits=3))  [$pct%]")
+        println("  -> K1 = $(round(K1, sigdigits=3))  [$pct %]")
     end
 
     println("  -> Sweep complete.")
-    return R_matrix, Qc_matrix
+    return R1_matrix, R15_matrix, R2_matrix
 end
 
 # ==============================================================================
-# 4. PLOTTING
+# 5. PLOTTING
 # ==============================================================================
 
 function make_heatmap(K1_vals, K2_vals, Z, title_str, cbar_title;
@@ -186,91 +220,128 @@ function make_heatmap(K1_vals, K2_vals, Z, title_str, cbar_title;
             bottom_margin  = 5Plots.mm)
 end
 
-# Scatter R_2 vs R to reveal the dynamical regimes ----------------------------
-function make_scatter(R_mat, Qc_mat, title_str)
-    R_vec  = vec(R_mat)
-    Qc_vec = vec(Qc_mat)
-    scatter(R_vec, Qc_vec;
-            xlabel      = L"R_1 \; \mathrm{(global \; order \; parameter)}",
-            ylabel      = L"R_2 \; \mathrm{(cluster \; order \; parameter)}",
-            title       = title_str,
-            markersize  = 4,
-            markeralpha = 0.7,
+function make_scatter(R1_mat, R2_mat, title_str)
+    scatter(vec(R1_mat), vec(R2_mat);
+            xlabel            = L"R_1 \;\mathrm{(global\;synchrony)}",
+            ylabel            = L"R_2 \;\mathrm{(2\text{-}cluster\;synchrony)}",
+            title             = title_str,
+            markersize        = 4,
+            markeralpha       = 0.7,
             markerstrokewidth = 0,
-            color       = :steelblue,
-            xlims       = (0, 1),
-            ylims       = (0, 1),
-            size        = (500, 450))
+            color             = :steelblue,
+            xlims             = (0.0, 1.0),
+            ylims             = (0.0, 1.0),
+            size              = (500, 450))
 end
 
 # ==============================================================================
-# 5. MAIN EXECUTION
+# 6. SAVE HELPER
 # ==============================================================================
 
-# Grid resolution – increase length for publication-quality figures
-K1_vals = 10.0 .^ range(-1, 0, length = 11)
-K2_vals = 10.0 .^ range(-1, 0, length = 11)
+"""
+    save_results(cfg, K1_vals, K2_vals, R1_mat, R2_mat)
 
-N = 10  # Number of oscillators
+Output directory tree:
 
-# Configurations: (label, τ, symmetrize_B)
-# τ ≪ 1 → adiabatic 
-configs = [
-    ("adiabatic_asymB",  0.001, false),   # τ → 0, general B_{ijk} ≠ B_{ikj}
-    ("adiabatic_symB",   0.001, true),    # τ → 0, B_{ijk} = B_{ikj} (HOI limit)
-    ("intermediate",     0.05,  false),   # intermediate τ
-]
+    BASE_OUT_DIR/
+    └── N{N}_p{p_edge}/
+        └── {label}/
+            ├── heatmap_R1.{png,pdf}
+            ├── heatmap_R2.{png,pdf}
+            ├── panel_R1_R2.{png,pdf}
+            └── scatter_R2_vs_R1.{png,pdf}
 
-for (label, τ_val, sym_B) in configs
-    println("\n" * "="^65)
-    println("Config: $label   (τ = $τ_val, symmetric_B = $sym_B)")
-    println("="^65)
+Network parameters (N, p_edge) form the parent folder so that sweeps with
+different network sizes are kept separate from those varying τ or B symmetry.
+"""
+function save_results(cfg, K1_vals, K2_vals, R1_mat, R15_mat, R2_mat)
+    label, τ, sym_B, N, p_edge = cfg
 
-    out_dir = joinpath(base_out_dir, label)
+    # e.g.  N20_p0p30
+    p_str   = replace(string(round(p_edge, digits = 2)), "." => "p")
+    net_dir = "N$(N)_p$(p_str)"
+    out_dir = joinpath(BASE_OUT_DIR, net_dir, label)
     mkpath(out_dir)
 
-    R_mat, Qc_mat = run_parameter_sweep(N, τ_val, sym_B;
-                                         K1_vals = K1_vals,
-                                         K2_vals = K2_vals)
-
-    τ_str  = L"\tau = %$(τ_val)"
+    # LaTeX title string
+    τ_str   = L"\tau = %$(τ)"
     sym_str = sym_B ? L",\; B_{ijk}=B_{ikj}" : L",\; B_{ijk}\neq B_{ikj}"
+    full_title = τ_str * sym_str
 
-    # ── Heatmap: Kuramoto R ────────────────────────────────────────────────
-    p_R = make_heatmap(K1_vals, K2_vals, R_mat,
-                       τ_str * sym_str,
-                       L"R_1",
-                       colormap = :viridis)
+    p_R1 = make_heatmap(K1_vals, K2_vals, R1_mat,
+                        full_title, L"R_1"; colormap = :viridis)
 
-    # ── Heatmap: Cluster order parameter R_2 ──────────────────────────────
-    p_R2 = make_heatmap(K1_vals, K2_vals, Qc_mat,
-                        τ_str * sym_str,
-                        L"R_2",
-                        colormap = :inferno)
+    p_R15 = make_heatmap(K1_vals, K2_vals, R15_mat,
+                         full_title, L"R_{1.5}"; colormap = :plasma)
 
-    # ── Side-by-side panel ────────────────────────────────────────────────
-    p_panel = plot(p_R, p_R2;
-                   layout = (1, 2),
-                   size   = (1050, 450),
-                   plot_title = "Parameter space  ($label)")
+    p_R2 = make_heatmap(K1_vals, K2_vals, R2_mat,
+                        full_title, L"R_2"; colormap = :inferno)
 
-    # ── Scatter: R_2 vs R (reveals dynamical regimes) ─────────────────────
-    p_scatter = make_scatter(R_mat, Qc_mat, τ_str * sym_str)
+    p_panel = plot(p_R1, p_R15, p_R2;
+                   layout     = (1, 3),
+                   size       = (1050, 450),
+                   plot_title = "$(label)  |  N=$(N)  p=$(p_edge)")
 
-    # Save all figures
+    p_scatter = make_scatter(R1_mat, R2_mat, full_title)
+
     for (fname, fig) in [
-            ("heatmap_R",      p_R),
-            ("heatmap_R2",     p_R2),
-            ("panel_R_Qc",     p_panel),
-            ("scatter_Qc_R",   p_scatter),
+            ("heatmap_R1",       p_R1),
+            ("heatmap_R15",      p_R15),    
+            ("heatmap_R2",       p_R2),
+            ("panel_R1_R2",      p_panel),
+            ("scatter_R2_vs_R1", p_scatter),
         ]
-        for ext in ["png", "pdf"]
-            path = joinpath(out_dir, "$(fname).$(ext)")
-            savefig(fig, path)
+        for ext in ("png", "pdf")
+            savefig(fig, joinpath(out_dir, "$(fname).$(ext)"))
         end
     end
 
-    println("\n[✓] Figures saved to: $out_dir")
+    println("\n  [✓] Saved → $out_dir")
 end
 
-println("\n[Done] All sweeps completed.")
+# ==============================================================================
+# 7. CONFIGURATIONS AND MAIN EXECUTION
+# ==============================================================================
+
+# K₁ / K₂ sweep grid (log-spaced)
+K1_vals = 10.0 .^ range(-2, 0, length = 15)
+K2_vals = 10.0 .^ range(-2, 0, length = 15)
+
+# Configuration tuples:  (label, τ, symmetrize_B, N, p_edge)
+#
+#   label        – descriptive string; becomes the leaf folder name
+#   τ            – transmission timescale
+#                    τ ≪ 1  →  adiabatic / HOI limit
+#                    τ ~ 1  →  intermediate inertia
+#                    τ ≫ 1  →  pairwise (standard Kuramoto) limit
+#   symmetrize_B – true enforces B_{ijk} = B_{ikj}, enabling the exact
+#                  (1,1,−2) HOI reduction; false is the general physical case
+#   N            – number of oscillators
+#   p_edge       – Erdős–Rényi edge probability for both A and B
+#
+configs = [
+    # ── Adiabatic regime ──────────────────────────────────────────────────────
+    ("adiabatic_asymB",  0.001, false, 10, 1.0),
+    ("adiabatic_symB",   0.001, true,  10, 1.0),
+    # ── Intermediate inertia ──────────────────────────────────────────────────
+    ("intermediate",     0.05,  false, 10, 1.0),
+]
+
+for cfg in configs
+    label, τ_val, sym_B, N, p_edge = cfg
+
+    println("\n" * "="^65)
+    println("Config : $label")
+    println("Params : τ=$τ_val  |  sym_B=$sym_B  |  N=$N  |  p=$p_edge")
+    println("="^65)
+
+    R1_mat, R15_mat, R2_mat = run_parameter_sweep(cfg;
+                                          K1_vals = K1_vals,
+                                          K2_vals = K2_vals)
+
+    save_results(cfg, K1_vals, K2_vals, R1_mat, R15_mat, R2_mat)
+end
+
+println("\n" * "="^65)
+println("[Done]  All sweeps completed.")
+println("="^65)
