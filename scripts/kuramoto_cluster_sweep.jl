@@ -150,8 +150,8 @@ function run_parameter_sweep(cfg;
     nK2 = length(K2_vals)
 
     R1_matrix = zeros(Float64, nK1, nK2)
-    R15_matrix = zeros(Float64, nK1, nK2)
     R2_matrix = zeros(Float64, nK1, nK2)
+    R4_matrix = zeros(Float64, nK1, nK2)
 
     println("  -> Grid $(nK1)×$(nK2) | N=$N | p=$p_edge | τ=$τ | sym_B=$sym_B")
 
@@ -178,18 +178,19 @@ function run_parameter_sweep(cfg;
             cnt    = length(eq_idx)
 
             R1_sum = 0.0
-            R15_sum = 0.0
             R2_sum = 0.0
+            R4_sum = 0.0
             for idx in eq_idx
                 θ_t    = sol.u[idx][1:N]
                 R1_sum += order_parameter(θ_t, 1)
-                R15_sum += order_parameter(θ_t, 1.5)
                 R2_sum += order_parameter(θ_t, 2)
+                R4_sum += order_parameter(θ_t, 4)
             end
 
             R1_matrix[i, j] = cnt > 0 ? R1_sum / cnt : 0.0
-            R15_matrix[i, j] = cnt > 0 ? R15_sum / cnt : 0.0
             R2_matrix[i, j] = cnt > 0 ? R2_sum / cnt : 0.0
+            R4_matrix[i, j] = cnt > 0 ? R4_sum / cnt : 0.0
+
         end
 
         pct = round(100 * i / nK1, digits = 1)
@@ -197,7 +198,7 @@ function run_parameter_sweep(cfg;
     end
 
     println("  -> Sweep complete.")
-    return R1_matrix, R15_matrix, R2_matrix
+    return R1_matrix, R2_matrix, R4_matrix
 end
 
 # ==============================================================================
@@ -255,7 +256,7 @@ Output directory tree:
 Network parameters (N, p_edge) form the parent folder so that sweeps with
 different network sizes are kept separate from those varying τ or B symmetry.
 """
-function save_results(cfg, K1_vals, K2_vals, R1_mat, R15_mat, R2_mat)
+function save_results(cfg, K1_vals, K2_vals, R1_mat, R2_mat, R4_mat)
     label, τ, sym_B, N, p_edge = cfg
 
     # e.g.  N20_p0p30
@@ -272,23 +273,24 @@ function save_results(cfg, K1_vals, K2_vals, R1_mat, R15_mat, R2_mat)
     p_R1 = make_heatmap(K1_vals, K2_vals, R1_mat,
                         full_title, L"R_1"; colormap = :viridis)
 
-    p_R15 = make_heatmap(K1_vals, K2_vals, R15_mat,
-                         full_title, L"R_{1.5}"; colormap = :plasma)
 
     p_R2 = make_heatmap(K1_vals, K2_vals, R2_mat,
                         full_title, L"R_2"; colormap = :inferno)
 
-    p_panel = plot(p_R1, p_R15, p_R2;
+    p_R4 = make_heatmap(K1_vals, K2_vals, R4_mat,
+                         full_title, L"R_{4}"; colormap = :plasma)
+    p_panel = plot(p_R1, p_R2, p_R4;
                    layout     = (1, 3),
-                   size       = (1050, 450),
+                   size       = (1250, 450),
                    plot_title = "$(label)  |  N=$(N)  p=$(p_edge)")
 
     p_scatter = make_scatter(R1_mat, R2_mat, full_title)
+    p_scatter = make_scatter(R1_mat, R4_mat, full_title * L"  |  R_1 \mathrm{\ vs.\ } R_4")
 
     for (fname, fig) in [
-            ("heatmap_R1",       p_R1),
-            ("heatmap_R15",      p_R15),    
+            ("heatmap_R1",       p_R1), 
             ("heatmap_R2",       p_R2),
+            ("heatmap_R4",      p_R4),   
             ("panel_R1_R2",      p_panel),
             ("scatter_R2_vs_R1", p_scatter),
         ]
@@ -305,8 +307,8 @@ end
 # ==============================================================================
 
 # K₁ / K₂ sweep grid (log-spaced)
-K1_vals = 10.0 .^ range(-2, 0, length = 15)
-K2_vals = 10.0 .^ range(-2, 0, length = 15)
+K1_vals = 10.0 .^ range(-2, 0, length = 8)
+K2_vals = 10.0 .^ range(-2, 0, length = 8)
 
 # Configuration tuples:  (label, τ, symmetrize_B, N, p_edge)
 #
@@ -336,11 +338,11 @@ for cfg in configs
     println("Params : τ=$τ_val  |  sym_B=$sym_B  |  N=$N  |  p=$p_edge")
     println("="^65)
 
-    R1_mat, R15_mat, R2_mat = run_parameter_sweep(cfg;
+    R1_mat, R2_mat, R4_mat = run_parameter_sweep(cfg;
                                           K1_vals = K1_vals,
                                           K2_vals = K2_vals)
 
-    save_results(cfg, K1_vals, K2_vals, R1_mat, R15_mat, R2_mat)
+    save_results(cfg, K1_vals, K2_vals, R1_mat, R2_mat, R4_mat)
 end
 
 println("\n" * "="^65)
