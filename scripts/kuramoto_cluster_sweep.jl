@@ -324,10 +324,10 @@ K2_vals = 10.0 .^ range(-2, 0, length = 8)
 #
 configs = [
     # ── Adiabatic regime ──────────────────────────────────────────────────────
-    ("adiabatic_asymB",  0.001, false, 10, 1.0),
-    ("adiabatic_symB",   0.001, true,  10, 1.0),
+    ("adiabatic_asymB",  0.001, false, 20, 0.3),
+    ("adiabatic_symB",   0.001, true,  20, 0.3),
     # ── Intermediate inertia ──────────────────────────────────────────────────
-    ("intermediate",     0.05,  false, 10, 1.0),
+    ("intermediate",     0.05,  false, 20, 0.3),
 ]
 
 for cfg in configs
