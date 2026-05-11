@@ -88,8 +88,8 @@ function run_parameter_sweep(N = 20, τ = 0.05)
     end
 
     # Sweep Grids
-    K1_vals = range(0.0, 1.0, length=11)
-    K2_vals = range(0.0, 1.0, length=11)
+    K1_vals = range(0.0, 1.0, length=21)
+    K2_vals = range(0.0, 1.0, length=21)
     
     # Result Matrix
     R_matrix = zeros(length(K1_vals), length(K2_vals))
