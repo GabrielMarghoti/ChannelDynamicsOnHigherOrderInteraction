@@ -44,17 +44,10 @@ function kuramoto_dynamics!(du, x, p, t)
     end
 end
 
-<<<<<<< HEAD
 # Parameter Arrays
 K1_vals = [0.0, 0.01, 0.1, 0.2, 0.5, 1.0]
 K2_vals = [0.0, 0.01, 0.05, 0.1]
 tau_vals = [0.01, 0.5, 1.0, 5.0]
-=======
-# Arrays de parâmetros para a varredura
-K1_vals = [0.0, 0.01, 0.1, 0.5, 1.0]
-K2_vals = [0.0, 0.01, 0.5, 1.0]
-tau_vals = [0.01, 0.1, 1.0, 10.0] # Inclui limite rápido e lento
->>>>>>> 42fff2496e45677c2c09e48882a5afe5a69e64a8
 
 for K1 in K1_vals, K2 in K2_vals, tau in tau_vals
     println("Analyzing: K1=$K1 | K2=$K2 | tau=$tau")
