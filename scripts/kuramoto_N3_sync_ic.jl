@@ -165,7 +165,7 @@ function run_sweep(τ::Float64, sym_D::Bool, ω::Vector{Float64},
 
     # Splay-state initial condition: θ₀ = [0, 2π/3, 4π/3]
     # Evenly spaced → neutral starting point (neither sync nor anti-sync biased)
-    θ0 = [0 for n in 1:N]  #same inictial conditions
+    θ0 = [0 for n in 1:N]  #same inictial conditions3 os
     y0 = vcat(θ0, zeros(Float64, N * N))
 
     for i in 1:nK1, j in 1:nK2
