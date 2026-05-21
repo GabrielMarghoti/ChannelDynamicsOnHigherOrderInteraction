@@ -46,7 +46,12 @@ function build_B(sym_D::Bool)
         B[2,1,3] = B[2,3,1] = 0.5
         B[3,1,2] = B[3,2,1] = 0.5
     else
-        B[1,2,3] = 1.0; B[2,1,3] = 1.0; B[3,1,2] = 1.0
+        B[1,2,3] =  0.5
+        B[1,3,2] = -0.5
+        B[2,1,3] =  0.5
+        B[2,3,1] = -0.5
+        B[3,1,2] =  0.5
+        B[3,2,1] = -0.5
     end
     return B
 end
@@ -107,11 +112,11 @@ end
 # ==============================================================================
 
 tau_vals   = 10.0 .^ range(-3, 1, length=20)
-num_trials = 50
+num_trials = 100
 
-const ω0       = [0.08, -0.05, -0.03]
-const K1_fixed = 0.3
-const K2_fixed = 0.7
+const ω0       = [-0.1, 0, 0.1]
+const K1_fixed = 0.1
+const K2_fixed = 0.1
 
 println("Simulating D=0  (symmetric D)...")
 frac_sync_sym  = run_ic_sweep(tau_vals, true,  ω0, K1_fixed, K2_fixed, num_trials)
@@ -128,13 +133,11 @@ function plot_sync_fraction(tau_vals, frac_sym, frac_asym)
         xscale  = :log10,
         xlabel  = L"\tau",
         ylabel  = L"f_{\mathrm{sync}}",
-        title   = "Fraction of ICs reaching synchrony\n" *
-                  L"(R_1 \geq %$(SYNC_THRESHOLD),\ \theta(0) \sim \mathcal{U}(0,2\pi))",
         ylims   = (0, 1.05),
         legend  = :topright,
     )
-    plot!(p, tau_vals, frac_sym,  label=L"D = 0",    color=:blue,  marker=:circle)
-    plot!(p, tau_vals, frac_asym, label=L"D \neq 0", color=:red,   marker=:square)
+    plot!(p, tau_vals, frac_sym,  label=L" C \neq 0, D = 0",    color=:blue,  marker=:circle)
+    plot!(p, tau_vals, frac_asym, label=L"C = 0, D \neq 0", color=:red,   marker=:square)
     return p
 end
 
