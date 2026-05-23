@@ -74,11 +74,11 @@ function run_sweep_for_tau(τ::Float64, n_points::Int)
     # Log-spaced fractions from 1% to 100%
     fractions = 10.0 .^ range(log10(0.01), log10(1.0), length=n_points)
     
-    K1_base = 0.1
+    K1_base = 0.01
     configs = [
-        (K1_base, K1_base * 0.1, L"K_2/K_1 = 0.1", :steelblue),
+        (K1_base, K1_base * 0.0, L"K_2/K_1 = 0.0", :steelblue),
         (K1_base, K1_base * 1.0, L"K_2/K_1 = 1.0", :forestgreen),
-        (K1_base, K1_base * 5.0, L"K_2/K_1 = 5.0", :crimson)
+        (K1_base, K1_base * 10.0, L"K_2/K_1 = 10.0", :crimson)
     ]
     
     results = Dict(label => zeros(n_points) for (_, _, label, _) in configs)
@@ -116,10 +116,10 @@ end
 function main()
     mkpath(BASE_OUT_DIR)
     println("Running sweep for Adiabatic Limit (τ = 0.001)...")
-    f_vals, res_ad, configs = run_sweep_for_tau(0.001, 25)
+    f_vals, res_ad, configs = run_sweep_for_tau(0.001, 20)
     
     println("Running sweep for Dynamic Limit (τ = 1.0)...")
-    _, res_dyn, _ = run_sweep_for_tau(1.0, 25)
+    _, res_dyn, _ = run_sweep_for_tau(1.0, 20)
 
     # Plot settings
     p_args = (
@@ -132,13 +132,13 @@ function main()
     )
 
     # Adiabatic Panel
-    p1 = plot(title=L"\tau = 0.001 \text{ (Adiabatic)}"; p_args...)
+    p1 = plot(title=L"\tau = 0.001"*" (Adiabatic)"; p_args...)
     for (_, _, label, color) in configs
         plot!(p1, f_vals, res_ad[label]; label=label, color=color, marker=:circle, markersize=3, markerstrokewidth=0)
     end
 
     # Dynamic Panel
-    p2 = plot(title=L"\tau = 1.0 \text{ (Dynamic)}"; p_args...)
+    p2 = plot(title=L"\tau = 1.0"*" (Dynamic)"; p_args...)
     for (_, _, label, color) in configs
         plot!(p2, f_vals, res_dyn[label]; label=label, color=color, marker=:circle, markersize=3, markerstrokewidth=0)
     end
