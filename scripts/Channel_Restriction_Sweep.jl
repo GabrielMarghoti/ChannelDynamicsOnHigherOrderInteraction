@@ -13,7 +13,7 @@ default(fontfamily = "Computer Modern", linewidth = 2, label = nothing, dpi=300,
 # SETTINGS
 # ==============================================================================
 const BASE_OUT_DIR = "figures/kuramoto_small_world"
-const N            = 12       
+const N            = 20       
 const τ            = 0.01     
 const SEED         = 42
 
@@ -33,7 +33,7 @@ function dynamic_kuramoto_sw!(dy, y, p, t)
         for j in 1:N
             s += u[i, j]
         end
-        dθ[i] = s/N
+        dθ[i] = s
     end
 
     for i in 1:N, j in 1:N
@@ -42,7 +42,7 @@ function dynamic_kuramoto_sw!(dy, y, p, t)
             lf += B[i, j, k] * cos(θ[k] - θ[i])
         end
         
-        du[i, j] = (-u[i, j] + (K1 * A[i, j] + K2 * lf/N) * sin(θ[j] - θ[i])) /(τ)
+        du[i, j] = (-u[i, j] + (K1 * A[i, j] + K2 * lf) * sin(θ[j] - θ[i])) / τ
     end
 end
 
@@ -55,14 +55,16 @@ end
 # ==============================================================================
 function build_sw_network(N::Int, p_shortcut::Float64, sym_type::Symbol, rng::AbstractRNG)
     L = zeros(Float64, N, N)
+    # Base ring lattice
     for i in 1:N
-        for d in 1:2
+        for d in 1:1
             right = mod1(i + d, N)
             L[i, right] = 1.0
             L[right, i] = 1.0
         end
     end
 
+    # Add shortcuts
     for i in 1:N, j in i+1:N
         if L[i,j] == 0.0 && rand(rng) < p_shortcut
             L[i,j] = 1.0
@@ -77,14 +79,10 @@ function build_sw_network(N::Int, p_shortcut::Float64, sym_type::Symbol, rng::Ab
         neighbors = findall(x -> x > 0, L[:, i])
         
         for j in neighbors
-            if sym_type == :symmetric
-                A[i, j] = 1.0
-            elseif sym_type == :antisymmetric
-                A[i, j] = i < j ? 1.0 : -1.0
-            elseif sym_type == :asymmetric
-                A[i, j] = rand(rng) > 0.5 ? 1.0 : 0.0
-            end
+            # The fundamental pairwise physical channel is ALWAYS bidirectional
+            A[i, j] = 1.0
             
+            # The symmetry constraint is isolated entirely to the local mean-field tensor B
             for k in neighbors
                 if j >= k
                     continue
@@ -118,12 +116,12 @@ function run_topology_sweep()
     rng = MersenneTwister(SEED)
     ω   = randn(rng, N) .* 0.1
     
-    p_vals = 10.0 .^ range(log10(0.001), log10(1.0), length=11)
+    p_vals = 10.0 .^ range(log10(0.001), log10(1.0), length=32)
     
     panels = [
-        (1.0, 0.0, L"\text{Pairwise Only } (K_1>0, K_2=0)"),
-        (0.0, 1.0, L"\text{High-Order Only } (K_1=0, K_2>0)"),
-        (1.0, 1.0, L"\text{Mixed Dynamics } (K_1=K_2)")
+        (0.05, 0.0, L"\text{Pairwise Only } (K_1>0, K_2=0)"),
+        (0.0, 0.05, L"\text{High-Order Only } (K_1=0, K_2>0)"),
+        (0.05, 0.05, L"\text{Mixed Dynamics } (K_1=K_2)")
     ]
     
     sym_cases = [
@@ -140,33 +138,29 @@ function run_topology_sweep()
 
     println("Sweeping Small-World Shortcuts sequentially (N=$(N))...")
 
-    # Inverted loops: configurations outer, parameter sweep inner
-    for (sym_type, _, _) in sym_cases
+    Threads.@threads for p_idx in eachindex(p_vals)
+        p_shortcut = p_vals[p_idx]
+        θ0 = range(0, 1, length = N) .* 2π
+        y0 = vcat(θ0, zeros(N * N))
+
         for (panel_idx, (K1, K2, _)) in enumerate(panels)
-            
-            local_rng = MersenneTwister(SEED + panel_idx)
-            # Initialize state once per configuration
-            θ0 = rand(local_rng, N) .* 2π
-            y0 = vcat(θ0, zeros(N * N))
-            
-            for p_idx in 1:length(p_vals)
-                p_shortcut = p_vals[p_idx]
-                
+            for (sym_type, _, _) in sym_cases
+                # create a local RNG per run to ensure reproducibility across threads
+                local_rng = MersenneTwister(SEED + panel_idx + p_idx)
+
                 A, B = build_sw_network(N, p_shortcut, sym_type, local_rng)
+
                 p_sys = (ω, A, B, K1, K2, τ, N)
-                
+
                 prob  = ODEProblem(dynamic_kuramoto_sw!, y0, tspan, p_sys)
                 sol   = solve(prob, Tsit5(), saveat=0.5, reltol=1e-5, abstol=1e-5)
-                
+
                 eq_idx = findall(t -> t >= t_eq, sol.t)
                 R1_avg = mean([Rq_order(sol.u[idx][1:N], 1) for idx in eq_idx])
                 R2_avg = mean([Rq_order(sol.u[idx][1:N], 2) for idx in eq_idx])
-                
+
                 results_R1[panel_idx][sym_type][p_idx] = R1_avg
                 results_R2[panel_idx][sym_type][p_idx] = R2_avg
-                
-                # State continuation: update initial condition for next step
-                #y0 = sol.u[end]
             end
         end
     end
@@ -195,7 +189,6 @@ function plot_results(p_vals, res_R1, res_R2, panels, sym_cases)
         )
         
         for (sym_type, label_str, color) in sym_cases
-            # Plot R1 (Solid)
             plot!(plt, p_vals, res_R1[panel_idx][sym_type];
                   label = label_str,
                   color = color,
@@ -204,7 +197,6 @@ function plot_results(p_vals, res_R1, res_R2, panels, sym_cases)
                   markersize = 3,
                   markerstrokewidth = 0)
                   
-            # Plot R2 (Dashed, no legend label to avoid clutter)
             plot!(plt, p_vals, res_R2[panel_idx][sym_type];
                   label = "",
                   color = color,

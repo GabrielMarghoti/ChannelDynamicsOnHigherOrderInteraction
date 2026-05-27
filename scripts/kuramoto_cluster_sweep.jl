@@ -307,8 +307,8 @@ end
 # ==============================================================================
 
 # K₁ / K₂ sweep grid (log-spaced)
-K1_vals = 10.0 .^ range(-2, 0, length = 30)
-K2_vals = 10.0 .^ range(-2, 0, length = 30)
+K1_vals = 10.0 .^ range(-2, 0, length = 10)
+K2_vals = 10.0 .^ range(-2, 0, length = 10)
 
 # Configuration tuples:  (label, τ, symmetrize_B, N, p_edge)
 #
@@ -324,10 +324,10 @@ K2_vals = 10.0 .^ range(-2, 0, length = 30)
 #
 configs = [
     # ── Adiabatic regime ──────────────────────────────────────────────────────
-    ("adiabatic_asymB",  0.001, false, 3, 1.0),
-    ("adiabatic_symB",   0.001, true,  3, 1.0),
+    ("adiabatic_asymB",  0.001, false, 10, 1.0),
+    ("adiabatic_symB",   0.001, true,  10, 1.0),
     # ── Intermediate inertia ──────────────────────────────────────────────────
-    ("intermediate",     0.05,  false, 3, 1.0),
+    ("intermediate",     0.05,  false, 10, 1.0),
 ]
 
 for cfg in configs
