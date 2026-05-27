@@ -41,7 +41,7 @@ function dynamic_kuramoto!(dy, y, p, t)
     for i in 1:N
         dθ[i] = ω[i]
         for j in 1:N
-            dθ[i] += u[i, j]         
+            dθ[i] += u[i, j] /N        
         end
     end
 
@@ -52,7 +52,7 @@ function dynamic_kuramoto!(dy, y, p, t)
             for k in 1:N
                 local_field += B[i, j, k] * cos(θ[k] - θ[i])
             end
-            driving  = (K1 * A[i, j] + K2 * local_field) * sin(θ[j] - θ[i])
+            driving  = (K1 * A[i, j] + K2 * local_field/N) * sin(θ[j] - θ[i])
             du[i, j] = (-u[i, j] + driving) / τ
         end
     end

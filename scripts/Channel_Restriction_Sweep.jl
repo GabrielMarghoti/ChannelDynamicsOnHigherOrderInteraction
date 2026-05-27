@@ -12,15 +12,16 @@ default(fontfamily = "Computer Modern", linewidth = 2, label = nothing, dpi=300,
 # ==============================================================================
 # SETTINGS
 # ==============================================================================
-const BASE_OUT_DIR = "figures/kuramoto_channel_sweep"
-const N            = 20
+const BASE_OUT_DIR = "figures/kuramoto_small_world"
+const N            = 12       
+const τ            = 0.01     
 const SEED         = 42
 
 # ==============================================================================
 # 1. DYNAMICAL SYSTEM
 # ==============================================================================
-function dynamic_kuramoto_restricted!(dy, y, p, t)
-    ω, channel_mask, B, K1, K2, τ, N = p
+function dynamic_kuramoto_sw!(dy, y, p, t)
+    ω, A, B, K1, K2, τ, N = p
 
     θ  = @view y[1:N]
     u  = reshape(@view(y[N+1:end]), N, N)
@@ -32,122 +33,196 @@ function dynamic_kuramoto_restricted!(dy, y, p, t)
         for j in 1:N
             s += u[i, j]
         end
-        dθ[i] = s
+        dθ[i] = s/N
     end
 
     for i in 1:N, j in 1:N
-        if channel_mask[i, j] == 0.0
-            du[i, j] = -u[i, j] / τ
-            continue
-        end
-        
         lf = 0.0
         for k in 1:N
             lf += B[i, j, k] * cos(θ[k] - θ[i])
         end
         
-        du[i, j] = (-u[i, j] + (K1 + K2 * lf) * sin(θ[j] - θ[i])) / τ
+        du[i, j] = (-u[i, j] + (K1 * A[i, j] + K2 * lf/N) * sin(θ[j] - θ[i])) /(τ)
     end
 end
 
-function R1_order(θ::AbstractVector{<:Real})
-    return abs(sum(exp.(im .* θ)) / length(θ))
+function Rq_order(θ::AbstractVector{<:Real}, q::Int)
+    return abs(sum(exp.(im * q .* θ)) / length(θ))
 end
 
-function build_symmetric_B(N::Int)
-    B = ones(Float64, N, N, N)
+# ==============================================================================
+# 2. SMALL WORLD NETWORK CONSTRUCTION & SYMMETRY
+# ==============================================================================
+function build_sw_network(N::Int, p_shortcut::Float64, sym_type::Symbol, rng::AbstractRNG)
+    L = zeros(Float64, N, N)
     for i in 1:N
-        B[i, i, :] .= 0.0
-        B[i, :, i] .= 0.0
+        for d in 1:2
+            right = mod1(i + d, N)
+            L[i, right] = 1.0
+            L[right, i] = 1.0
+        end
     end
-    return B
+
+    for i in 1:N, j in i+1:N
+        if L[i,j] == 0.0 && rand(rng) < p_shortcut
+            L[i,j] = 1.0
+            L[j,i] = 1.0
+        end
+    end
+
+    A = zeros(Float64, N, N)
+    B = zeros(Float64, N, N, N)
+
+    for i in 1:N
+        neighbors = findall(x -> x > 0, L[:, i])
+        
+        for j in neighbors
+            if sym_type == :symmetric
+                A[i, j] = 1.0
+            elseif sym_type == :antisymmetric
+                A[i, j] = i < j ? 1.0 : -1.0
+            elseif sym_type == :asymmetric
+                A[i, j] = rand(rng) > 0.5 ? 1.0 : 0.0
+            end
+            
+            for k in neighbors
+                if j >= k
+                    continue
+                end
+                
+                if sym_type == :symmetric
+                    B[i, j, k] = 1.0
+                    B[i, k, j] = 1.0
+                elseif sym_type == :antisymmetric
+                    B[i, j, k] = 1.0
+                    B[i, k, j] = -1.0
+                elseif sym_type == :asymmetric
+                    if rand(rng) > 0.5
+                        B[i, j, k] = 1.0
+                        B[i, k, j] = 0.0
+                    else
+                        B[i, j, k] = 0.0
+                        B[i, k, j] = 1.0
+                    end
+                end
+            end
+        end
+    end
+    return A, B
 end
 
 # ==============================================================================
-# 2. SWEEP EXECUTION
+# 3. SWEEP EXECUTION
 # ==============================================================================
-function run_sweep_for_tau(τ::Float64, n_points::Int)
+function run_topology_sweep()
     rng = MersenneTwister(SEED)
     ω   = randn(rng, N) .* 0.1
-    B   = build_symmetric_B(N)
     
-    # Log-spaced fractions from 1% to 100%
-    fractions = 10.0 .^ range(log10(0.01), log10(1.0), length=n_points)
+    p_vals = 10.0 .^ range(log10(0.001), log10(1.0), length=11)
     
-    K1_base = 0.01
-    configs = [
-        (K1_base, K1_base * 0.0, L"K_2/K_1 = 0.0", :steelblue),
-        (K1_base, K1_base * 1.0, L"K_2/K_1 = 1.0", :forestgreen),
-        (K1_base, K1_base * 10.0, L"K_2/K_1 = 10.0", :crimson)
+    panels = [
+        (1.0, 0.0, L"\text{Pairwise Only } (K_1>0, K_2=0)"),
+        (0.0, 1.0, L"\text{High-Order Only } (K_1=0, K_2>0)"),
+        (1.0, 1.0, L"\text{Mixed Dynamics } (K_1=K_2)")
     ]
     
-    results = Dict(label => zeros(n_points) for (_, _, label, _) in configs)
+    sym_cases = [
+        (:symmetric,     "Symmetric",     :steelblue),
+        (:antisymmetric, "Antisymmetric", :crimson),
+        (:asymmetric,    "Mixed (Asym)",  :forestgreen)
+    ]
+    
+    results_R1 = Dict(i => Dict(sym => zeros(length(p_vals)) for (sym, _, _) in sym_cases) for i in 1:3)
+    results_R2 = Dict(i => Dict(sym => zeros(length(p_vals)) for (sym, _, _) in sym_cases) for i in 1:3)
+    
     tspan = (0.0, 150.0)
     t_eq  = 100.0
 
-    for (i, f) in enumerate(fractions)
-        num_active = max(1, round(Int, f * N^2))
-        
-        mask_flat = zeros(Float64, N^2)
-        mask_flat[1:num_active] .= 1.0
-        shuffle!(rng, mask_flat)
-        mask = reshape(mask_flat, N, N)
-        
-        for (K1, K2, label, _) in configs
-            θ0 = rand(rng, N) .* 2π
+    println("Sweeping Small-World Shortcuts sequentially (N=$(N))...")
+
+    # Inverted loops: configurations outer, parameter sweep inner
+    for (sym_type, _, _) in sym_cases
+        for (panel_idx, (K1, K2, _)) in enumerate(panels)
+            
+            local_rng = MersenneTwister(SEED + panel_idx)
+            # Initialize state once per configuration
+            θ0 = rand(local_rng, N) .* 2π
             y0 = vcat(θ0, zeros(N * N))
             
-            p    = (ω, mask, B, K1, K2, τ, N)
-            prob = ODEProblem(dynamic_kuramoto_restricted!, y0, tspan, p)
-            sol  = solve(prob, Tsit5(), saveat=0.5, reltol=1e-6, abstol=1e-6)
-            
-            eq_idx = findall(t -> t >= t_eq, sol.t)
-            R1_avg = mean([R1_order(sol.u[idx][1:N]) for idx in eq_idx])
-            results[label][i] = R1_avg
+            for p_idx in 1:length(p_vals)
+                p_shortcut = p_vals[p_idx]
+                
+                A, B = build_sw_network(N, p_shortcut, sym_type, local_rng)
+                p_sys = (ω, A, B, K1, K2, τ, N)
+                
+                prob  = ODEProblem(dynamic_kuramoto_sw!, y0, tspan, p_sys)
+                sol   = solve(prob, Tsit5(), saveat=0.5, reltol=1e-5, abstol=1e-5)
+                
+                eq_idx = findall(t -> t >= t_eq, sol.t)
+                R1_avg = mean([Rq_order(sol.u[idx][1:N], 1) for idx in eq_idx])
+                R2_avg = mean([Rq_order(sol.u[idx][1:N], 2) for idx in eq_idx])
+                
+                results_R1[panel_idx][sym_type][p_idx] = R1_avg
+                results_R2[panel_idx][sym_type][p_idx] = R2_avg
+                
+                # State continuation: update initial condition for next step
+                #y0 = sol.u[end]
+            end
         end
     end
     
-    return fractions, results, configs
+    return p_vals, results_R1, results_R2, panels, sym_cases
 end
 
 # ==============================================================================
-# 3. PLOTTING & SAVE
+# 4. PLOTTING & SAVE
 # ==============================================================================
-function main()
+function plot_results(p_vals, res_R1, res_R2, panels, sym_cases)
     mkpath(BASE_OUT_DIR)
-    println("Running sweep for Adiabatic Limit (τ = 0.001)...")
-    f_vals, res_ad, configs = run_sweep_for_tau(0.001, 20)
     
-    println("Running sweep for Dynamic Limit (τ = 1.0)...")
-    _, res_dyn, _ = run_sweep_for_tau(1.0, 20)
-
-    # Plot settings
-    p_args = (
-        xscale = :log10,
-        xlims  = (0.01, 1.0),
-        ylims  = (0.0, 1.0),
-        xlabel = L"\text{Fraction } (N_u/N_\theta^2)",
-        ylabel = L"R_1",
-        legend = :topleft
-    )
-
-    # Adiabatic Panel
-    p1 = plot(title=L"\tau = 0.001"*" (Adiabatic)"; p_args...)
-    for (_, _, label, color) in configs
-        plot!(p1, f_vals, res_ad[label]; label=label, color=color, marker=:circle, markersize=3, markerstrokewidth=0)
-    end
-
-    # Dynamic Panel
-    p2 = plot(title=L"\tau = 1.0"*" (Dynamic)"; p_args...)
-    for (_, _, label, color) in configs
-        plot!(p2, f_vals, res_dyn[label]; label=label, color=color, marker=:circle, markersize=3, markerstrokewidth=0)
-    end
-
-    panel = plot(p1, p2, layout=(1, 2), size=(1000, 450), left_margin=5Plots.mm, bottom_margin=5Plots.mm)
+    plot_list = []
     
-    out_path = joinpath(BASE_OUT_DIR, "tau_comparison_panel.png")
-    savefig(panel, out_path)
+    for (panel_idx, (_, _, title_str)) in enumerate(panels)
+        plt = plot(
+            title  = title_str,
+            xscale = :log10,
+            xlims  = (0.001, 1.0),
+            ylims  = (0.0, 1.0),
+            xlabel = panel_idx == 2 ? L"\text{Shortcut Probability } (p)" : "",
+            ylabel = panel_idx == 1 ? L"\text{Coherence } (R_1, R_2)" : "",
+            legend = panel_idx == 3 ? :bottomright : false,
+            titlefontsize = 11
+        )
+        
+        for (sym_type, label_str, color) in sym_cases
+            # Plot R1 (Solid)
+            plot!(plt, p_vals, res_R1[panel_idx][sym_type];
+                  label = label_str,
+                  color = color,
+                  linestyle = :solid,
+                  marker = :circle,
+                  markersize = 3,
+                  markerstrokewidth = 0)
+                  
+            # Plot R2 (Dashed, no legend label to avoid clutter)
+            plot!(plt, p_vals, res_R2[panel_idx][sym_type];
+                  label = "",
+                  color = color,
+                  linestyle = :dash,
+                  marker = :utriangle,
+                  markersize = 3,
+                  markerstrokewidth = 0)
+        end
+        push!(plot_list, plt)
+    end
+    
+    panel_fig = plot(plot_list..., layout=(1, 3), size=(1200, 400), 
+                     left_margin=5Plots.mm, bottom_margin=5Plots.mm)
+                     
+    out_path = joinpath(BASE_OUT_DIR, "small_world_symmetry_panel.png")
+    savefig(panel_fig, out_path)
     println("  [✓] Saved → $out_path")
 end
 
-main()
+p_vals, res_R1, res_R2, panels, sym_cases = run_topology_sweep()
+plot_results(p_vals, res_R1, res_R2, panels, sym_cases)
