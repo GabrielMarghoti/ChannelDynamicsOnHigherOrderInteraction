@@ -12,7 +12,7 @@ default(fontfamily = "Computer Modern", linewidth = 2, label = nothing,
 # ==============================================================================
 # OUTPUT DIRECTORY
 # ==============================================================================
-const BASE_OUT_DIR = "figures/kuramoto_symmetry_panel"
+BASE_OUT_DIR = "figures/kuramoto_symmetry_panel"
 
 # ==============================================================================
 # 1. DYNAMICAL SYSTEM
@@ -182,7 +182,9 @@ function generate_four_panel_plot()
     # Parameters
     N      = 10
     p_edge = 1.0
-    τ      = 0.001 # Adiabatic limit to highlight HOI differences
+    τ      = 1.0 # Adiabatic limit to highlight HOI differences
+    OUT_DIR = BASE_OUT_DIR*"/N$(N)_τ$(τ)"
+    mkpath(OUT_DIR)
     
     K1_vals = 10.0 .^ range(-2, 0, length=32)
     K2_vals = 10.0 .^ range(-2, 0, length=32)
@@ -204,7 +206,7 @@ function generate_four_panel_plot()
                       bottom_margin = 5Plots.mm,
                       plot_title = L"\text{Dynamical Response: } \tau=%$τ, \text{ Network } N=%$N")
 
-    out_file = joinpath(BASE_OUT_DIR, "four_panel_symmetry_N$(N).png")
+    out_file = joinpath(OUT_DIR, "four_panel_symmetry_N$(N).png")
     savefig(panel_plot, out_file)
     println("\n  [✓] Saved 2x2 Panel → $out_file")
 
@@ -224,7 +226,7 @@ function generate_four_panel_plot()
                       bottom_margin = 5Plots.mm,
                       plot_title = L"\text{Dynamical Response: } \tau=%$τ, \text{ Network } N=%$N")
 
-    out_file = joinpath(BASE_OUT_DIR, "four_panel_symmetry_N$(N)_smooth.png")
+    out_file = joinpath(OUT_DIR, "four_panel_symmetry_N$(N)_smooth.png")
     savefig(panel_plot, out_file)
     println("\n  [✓] Saved 2x2 Panel → $out_file")
 end
