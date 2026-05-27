@@ -126,7 +126,7 @@ function generate_tau_panels()
     mkpath(BASE_OUT_DIR)
     
     N = 10
-    τ_vals = 10.0 .^ range(-2.1, 1.5, length=20)
+    τ_vals = 10.0 .^ range(-2.2, 2, length=20)
     K_pairs = [(0.2, 0.0), (0.2, 0.2), (0.2, 0.08)]
     
     R1_res, R2_res = run_tau_sweep(N, τ_vals, K_pairs)

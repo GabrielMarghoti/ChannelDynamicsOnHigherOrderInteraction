@@ -182,7 +182,7 @@ function generate_four_panel_plot()
     # Parameters
     N      = 10
     p_edge = 1.0
-    τ      = 1.0 # Adiabatic limit to highlight HOI differences
+    τ      = 30.0 # Adiabatic limit to highlight HOI differences
     OUT_DIR = BASE_OUT_DIR*"/N$(N)_τ$(τ)"
     mkpath(OUT_DIR)
     
