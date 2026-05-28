@@ -84,9 +84,11 @@ function run_tau_sweep(N, τ_vals, K_pairs; seed=42)
 
     R1_res = zeros(Float64, n_panels, n_tau)
     R2_res = zeros(Float64, n_panels, n_tau)
+    R4_res = zeros(Float64, n_panels, n_tau)
+    R8_res = zeros(Float64, n_panels, n_tau)
 
-    tspan = (0.0, 150.0)
-    t_eq  = 100.0
+    tspan = (0.0, 350.0)
+    t_eq  = 200.0
 
     rng = MersenneTwister(seed)
     ω = randn(rng, N) .* 0.1
@@ -95,15 +97,12 @@ function run_tau_sweep(N, τ_vals, K_pairs; seed=42)
     println("Sweeping τ across $(n_tau) points | N=$(N)")
 
     # Generate fixed initial conditions so the manifold comparison is exact
-    θ0_base = rand(rng, N) .* 2π
+    θ0_base = range(0, 2π, length=N)
     y0_init = vcat(θ0_base, zeros(N * N))
 
     for (p_idx, (K1, K2)) in enumerate(K_pairs)
         println("  -> Panel $p_idx: K1=$K1, K2=$K2")
         
-        # To avoid hysteresis artifacts, we reset y0 for each tau, 
-        # or you could carry sol.u[end] forward for a continuation approach.
-        # Here we use independent starts to cleanly resolve the steady state.
         Threads.@threads for (t_idx, τ) in collect(enumerate(τ_vals))
             p_sys = (ω, A, B, K1, K2, τ, N)
             prob = ODEProblem(dynamic_kuramoto!, y0_init, tspan, p_sys)
@@ -113,10 +112,12 @@ function run_tau_sweep(N, τ_vals, K_pairs; seed=42)
             
             R1_res[p_idx, t_idx] = mean([order_parameter(sol.u[idx][1:N], 1) for idx in eq_idx])
             R2_res[p_idx, t_idx] = mean([order_parameter(sol.u[idx][1:N], 2) for idx in eq_idx])
+            R4_res[p_idx, t_idx] = mean([order_parameter(sol.u[idx][1:N], 4) for idx in eq_idx])
+            R8_res[p_idx, t_idx] = mean([order_parameter(sol.u[idx][1:N], 8) for idx in eq_idx])
         end
     end
 
-    return R1_res, R2_res
+    return R1_res, R2_res, R4_res, R8_res
 end
 
 # ==============================================================================
@@ -125,58 +126,59 @@ end
 function generate_tau_panels()
     mkpath(BASE_OUT_DIR)
     
-    N = 10
-    τ_vals = 10.0 .^ range(-2.2, 2, length=20)
-    K_pairs = [(0.2, 0.0), (0.2, 0.2), (0.2, 0.08)]
+    N = 20
+    τ_vals = 10.0 .^ range(-1.1, 2, length=100)
     
-    R1_res, R2_res = run_tau_sweep(N, τ_vals, K_pairs)
+    # 3 Configurations: Pairwise dominant, Mixed, High Coupling
+    K_pairs = [(0.2, 0.0), (0.2, 0.2), (0.6, 0.8)]
+    
+    R1_res, R2_res, R4_res, R8_res = run_tau_sweep(N, τ_vals, K_pairs)
 
     plot_list = []
-    colors = [:black :black :black] #[:steelblue, :forestgreen, :crimson]
+    
+    # Color palette for distinct q values
+    c_R1 = :steelblue
+    c_R2 = :forestgreen
+    c_R4 = :darkorange
+    c_R8 = :crimson
 
     for (p_idx, (K1, K2)) in enumerate(K_pairs)
         plt = plot(
             xscale = :log10,
             xlims  = (minimum(τ_vals), maximum(τ_vals)),
             ylims  = (0.0, 1.0),
-            xlabel = "",
+            xlabel = p_idx == 3 ? L"\tau" : "",
             ylabel = "Coherence "*L"(R_q)",
             title  = L"K_1=%$K1, K_2=%$K2",
-            legend = p_idx == 3 ? :topright : false
+            legend = p_idx == 1 ? :topright : false
         )
 
-        # Plot R1 (Solid)
+        # R1
         plot!(plt, τ_vals, R1_res[p_idx, :];
-              label = L"R_1",
-            xlabel = L"\tau",
-            ylabel = "Coherence "*L"(R_q)",
-              color = colors[p_idx],
-              linestyle = :solid,
-              #marker = :circle,
-              markersize = 3,
-              markerstrokewidth = 0)
-
-        # Plot R2 (Dashed)
+              label = L"R_1", color = c_R1, linestyle = :solid)
+        # R2
         plot!(plt, τ_vals, R2_res[p_idx, :];
-              label = L"R_2",
-              color = colors[p_idx],
-              linestyle = :dash,
-              #marker = :utriangle,
-              markersize = 3,
-              markerstrokewidth = 0)
+              label = L"R_2", color = c_R2, linestyle = :dash)
+        # R4
+        plot!(plt, τ_vals, R4_res[p_idx, :];
+              label = L"R_4", color = c_R4, linestyle = :dot)
+        # R8
+        #plot!(plt, τ_vals, R8_res[p_idx, :];
+        #      label = L"R_8", color = c_R8, linestyle = :dashdot)
               
         push!(plot_list, plt)
     end
 
-    panel_plot = plot(plot_list[1], plot_list[2]; 
-                      layout = (2, 1), 
-                      size = (450, 500), 
+    # Combine into 3x1 Layout
+    panel_plot = plot(plot_list..., 
+                      layout = (3, 1), 
+                      size = (500, 600), 
                       left_margin = 5Plots.mm, 
                       bottom_margin = 5Plots.mm)
 
-    out_file = joinpath(BASE_OUT_DIR, "tau_sweep_panels_N$(N).png")
+    out_file = joinpath(BASE_OUT_DIR, "tau_sweep_panels_N$(N)_3x1.png")
     savefig(panel_plot, out_file)
-    println("\n  [✓] Saved 2x1 Panel → $out_file")
+    println("\n  [✓] Saved 3x1 Panel → $out_file")
 end
 
 # Execute

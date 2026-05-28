@@ -12,7 +12,7 @@ default(fontfamily = "Computer Modern", linewidth = 2, label = nothing,
 # ==============================================================================
 # OUTPUT DIRECTORY
 # ==============================================================================
-BASE_OUT_DIR = "figures/kuramoto_symmetry_panel"
+BASE_OUT_DIR = "figures/kuramoto_symmetry_panel_var_K1_K2_normalized"
 
 # ==============================================================================
 # 1. DYNAMICAL SYSTEM
@@ -40,7 +40,7 @@ function dynamic_kuramoto!(dy, y, p, t)
             for k in 1:N
                 local_field += B[i, j, k] * cos(θ[k] - θ[i])
             end
-            driving  = (K1 * A[i, j] + K2 * local_field ) * sin(θ[j] - θ[i])
+            driving  = (K1 * A[i, j] + K2 * local_field/N ) * sin(θ[j] - θ[i])
             du[i, j] = (-u[i, j] + driving) / τ
         end
     end
@@ -180,14 +180,15 @@ function generate_four_panel_plot()
     mkpath(BASE_OUT_DIR)
     
     # Parameters
-    N      = 10
+    N      = 24
+
     p_edge = 1.0
-    τ      = 30.0 # Adiabatic limit to highlight HOI differences
+    τ      = 0.001 # Adiabatic limit to highlight HOI differences
     OUT_DIR = BASE_OUT_DIR*"/N$(N)_τ$(τ)"
     mkpath(OUT_DIR)
     
-    K1_vals = 10.0 .^ range(-2, 0, length=32)
-    K2_vals = 10.0 .^ range(-2, 0, length=32)
+    K1_vals = 10.0 .^ range(-1.8, 1.8, length=16)
+    K2_vals = 10.0 .^ range(-1.8, 1.8, length=16)
 
     R1_s, R2_s, R1_a, R2_a = run_sweep(N, p_edge, τ, K1_vals, K2_vals)
 
