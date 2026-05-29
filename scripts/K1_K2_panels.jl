@@ -29,7 +29,7 @@ function dynamic_kuramoto!(dy, y, p, t)
     for i in 1:N
         dθ[i] = ω[i]
         for j in 1:N
-            dθ[i] += u[i, j] / N        
+            dθ[i] += u[i, j]  * sin(θ[j] - θ[i]) / N        
         end
     end
 
@@ -40,7 +40,7 @@ function dynamic_kuramoto!(dy, y, p, t)
             for k in 1:N
                 local_field += B[i, j, k] * cos(θ[k] - θ[i])
             end
-            driving  = (K1 * A[i, j] + K2 * local_field/N ) * sin(θ[j] - θ[i])
+            driving  = (K1 * A[i, j] + K2 * local_field/N )
             du[i, j] = (-u[i, j] + driving) / τ
         end
     end
@@ -180,15 +180,15 @@ function generate_four_panel_plot()
     mkpath(BASE_OUT_DIR)
     
     # Parameters
-    N      = 24
+    N      = 50
 
     p_edge = 1.0
-    τ      = 0.001 # Adiabatic limit to highlight HOI differences
+    τ      = 1.0 # Adiabatic limit to highlight HOI differences
     OUT_DIR = BASE_OUT_DIR*"/N$(N)_τ$(τ)"
     mkpath(OUT_DIR)
     
-    K1_vals = 10.0 .^ range(-1.8, 1.8, length=16)
-    K2_vals = 10.0 .^ range(-1.8, 1.8, length=16)
+    K1_vals = 10.0 .^ range(-1.8, 1.8, length=32)
+    K2_vals = 10.0 .^ range(-1.8, 1.8, length=32)
 
     R1_s, R2_s, R1_a, R2_a = run_sweep(N, p_edge, τ, K1_vals, K2_vals)
 

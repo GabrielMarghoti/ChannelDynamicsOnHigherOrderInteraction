@@ -29,7 +29,7 @@ function dynamic_kuramoto!(dy, y, p, t)
     for i in 1:N
         dθ[i] = ω[i]
         for j in 1:N
-            dθ[i] += u[i, j] / N        
+            dθ[i] += u[i, j] * sin(θ[j] - θ[i]) / N        
         end
     end
 
@@ -40,7 +40,7 @@ function dynamic_kuramoto!(dy, y, p, t)
             for k in 1:N
                 local_field += B[i, j, k] * cos(θ[k] - θ[i])
             end
-            driving  = (K1 * A[i, j] + K2 * local_field) * sin(θ[j] - θ[i])
+            driving  = (K1 * A[i, j] + K2 * local_field/N) 
             du[i, j] = (-u[i, j] + driving) / τ
         end
     end
@@ -88,7 +88,7 @@ function run_tau_sweep(N, τ_vals, K_pairs; seed=42)
     R8_res = zeros(Float64, n_panels, n_tau)
 
     tspan = (0.0, 350.0)
-    t_eq  = 200.0
+    t_eq  = 250.0
 
     rng = MersenneTwister(seed)
     ω = randn(rng, N) .* 0.1
@@ -126,11 +126,11 @@ end
 function generate_tau_panels()
     mkpath(BASE_OUT_DIR)
     
-    N = 20
-    τ_vals = 10.0 .^ range(-1.1, 2, length=100)
+    N = 50
+    τ_vals = 10.0 .^ range(-1.1, 2.0, length=100)
     
     # 3 Configurations: Pairwise dominant, Mixed, High Coupling
-    K_pairs = [(0.2, 0.0), (0.2, 0.2), (0.6, 0.8)]
+    K_pairs = [(0.5, 0.0), (0.5,1.0), (0.1, 100.0)]
     
     R1_res, R2_res, R4_res, R8_res = run_tau_sweep(N, τ_vals, K_pairs)
 
@@ -146,7 +146,7 @@ function generate_tau_panels()
         plt = plot(
             xscale = :log10,
             xlims  = (minimum(τ_vals), maximum(τ_vals)),
-            ylims  = (0.0, 1.0),
+            ylims  = (0.0, 1.05),
             xlabel = p_idx == 3 ? L"\tau" : "",
             ylabel = "Coherence "*L"(R_q)",
             title  = L"K_1=%$K1, K_2=%$K2",
