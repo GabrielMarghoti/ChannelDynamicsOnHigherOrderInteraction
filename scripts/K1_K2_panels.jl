@@ -180,15 +180,15 @@ function generate_four_panel_plot()
     mkpath(BASE_OUT_DIR)
     
     # Parameters
-    N      = 50
+    N      = 20
 
     p_edge = 1.0
-    τ      = 1.0 # Adiabatic limit to highlight HOI differences
+    τ      = 0.001 # Adiabatic limit to highlight HOI differences
     OUT_DIR = BASE_OUT_DIR*"/N$(N)_τ$(τ)"
     mkpath(OUT_DIR)
     
-    K1_vals = 10.0 .^ range(-1.8, 1.8, length=32)
-    K2_vals = 10.0 .^ range(-1.8, 1.8, length=32)
+    K1_vals = 10.0 .^ range(-1.8, 1.8, length=30)
+    K2_vals = 10.0 .^ range(-1.8, 1.8, length=30)
 
     R1_s, R2_s, R1_a, R2_a = run_sweep(N, p_edge, τ, K1_vals, K2_vals)
 
