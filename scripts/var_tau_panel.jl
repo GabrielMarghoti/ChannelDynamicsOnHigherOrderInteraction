@@ -126,19 +126,19 @@ end
 function generate_tau_panels()
     mkpath(BASE_OUT_DIR)
     
-    N = 50
+    N = 20
     τ_vals = 10.0 .^ range(-1.1, 2.0, length=100)
     
     # 3 Configurations: Pairwise dominant, Mixed, High Coupling
-    K_pairs = [(0.5, 0.0), (0.5,1.0), (0.1, 100.0)]
+    K_pairs = [(0.5, 0.0), (0.5,1.0), (0.1, 10.0)]
     
     R1_res, R2_res, R4_res, R8_res = run_tau_sweep(N, τ_vals, K_pairs)
 
     plot_list = []
     
     # Color palette for distinct q values
-    c_R1 = :steelblue
-    c_R2 = :forestgreen
+    c_R1 = :black
+    c_R2 = :steelblue
     c_R4 = :darkorange
     c_R8 = :crimson
 
@@ -160,8 +160,8 @@ function generate_tau_panels()
         plot!(plt, τ_vals, R2_res[p_idx, :];
               label = L"R_2", color = c_R2, linestyle = :dash)
         # R4
-        plot!(plt, τ_vals, R4_res[p_idx, :];
-              label = L"R_4", color = c_R4, linestyle = :dot)
+        #plot!(plt, τ_vals, R4_res[p_idx, :];
+        #      label = L"R_4", color = c_R4, linestyle = :dot)
         # R8
         #plot!(plt, τ_vals, R8_res[p_idx, :];
         #      label = L"R_8", color = c_R8, linestyle = :dashdot)
