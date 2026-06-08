@@ -63,12 +63,13 @@ end
 function run_and_plot_combined_sweep()
     mkpath(BASE_OUT_DIR)
     
-    N = 22
+    N = 30
     # Resolução moderada para acomodar os violinos sem sobreposição excessiva
-    τ_vals = 10.0 .^ range(-1.1, 2.0, length=10)
-    log_τ_vals = log10.(τ_vals) 
+    τ_vals = 10.0 .^ [-2, -1.5, -1, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]#range(-1.1, 2.0, length=10)
+    log_τ_vals = log10.(τ_vals)
     
-    K_pairs = [(0.5, 0.0), (0.5, 2.0), (0.1, 10.0)]
+
+    K_pairs = [(0.1, 20.0), (0.2, 20.0), (0.5, 0.0)]
     tspan = (0.0, 500.0)
     t_eq  = 300.0
     seed  = 42
@@ -81,12 +82,9 @@ function run_and_plot_combined_sweep()
 
     c_R1 = :steelblue; c_R2 = :forestgreen; c_R4 = :darkorange
     
-    # Rótulos customizados para o eixo X com major ticks labelados e minor ticks sem label
-    tick_idx = [1, max(1, floor(Int, length(log_τ_vals) / 3) + 1),
-                max(1, floor(Int, 2 * length(log_τ_vals) / 3) + 1), length(log_τ_vals)]
     x_ticks_vals = log_τ_vals
-    x_ticks_labs = fill("", length(log_τ_vals))
-    x_ticks_labs[tick_idx] .= [L"10^{-1}", L"10^0", L"10^1", L"10^2"]
+    
+    x_ticks_labs = [L"10^{-2}", L"10^{-1.5}", L"10^{-1}", L"10^{-0.5}", L"10^{0}", L"10^{0.5}", L"10^{1}", L"10^{1.5}", L"10^{2}"]
 
     println("Running sweep: $(length(τ_vals)) τ points | N=$(N) | Trials=$(num_trials)")
 
@@ -96,10 +94,10 @@ function run_and_plot_combined_sweep()
         res_sym  = Dict(q => zeros(length(τ_vals), num_trials) for q in [1, 2, 4])
         res_anti = Dict(q => zeros(length(τ_vals), num_trials) for q in [1, 2, 4])
 
-        Threads.@threads for t_idx in 1:length(τ_vals)
+        for t_idx in 1:length(τ_vals)
             τ = τ_vals[t_idx]
             
-            for trial in 1:num_trials
+            Threads.@threads for trial in 1:num_trials
                 θ0 = rand(N) .* 2π
                 y0_init = vcat(θ0, zeros(N * N))
 
@@ -123,17 +121,17 @@ function run_and_plot_combined_sweep()
 
 # Layout ajustado: painéis próximos (margens negativas) e eixo X compartilhado
         combined_plot = plot(layout = (2, 1), size = (450, 400), 
-                             left_margin = 5Plots.mm, right_margin = 5Plots.mm, link=:x)
+                             left_margin = 2Plots.mm, right_margin = 1Plots.mm, link=:x)
 
         # Painel Superior (Symmetric) - sem título, sem ticks no X (para grudar os gráficos)
-        plot!(combined_plot[1], ylabel="Coherence "*L"(R_q)", ylims=(-0.05, 1.05), 
-              xticks=false, bottom_margin=-3Plots.mm, legend=:topleft)
-        annotate!(combined_plot[1], log_τ_vals[1], 0.95, text(" Symmetric", :left, 10))
+        plot!(combined_plot[1], ylabel=L"R_q", ylims=(-0.05, 1.05), 
+              xlabel="", xticks=(x_ticks_vals, x_ticks_labs), bottom_margin=-1Plots.mm, legend=false)
+        annotate!(combined_plot[1], log_τ_vals[1], 0.95, text("(a)", :left, 10))
 
         # Painel Inferior (Antisymmetric) - sem título
-        plot!(combined_plot[2], ylabel="Coherence "*L"(R_q)", xlabel=L"\tau \text{ (Inertia)}", 
-              ylims=(-0.05, 1.05), xticks=(x_ticks_vals, x_ticks_labs), top_margin=-3Plots.mm, legend=false)
-        annotate!(combined_plot[2], log_τ_vals[1], 0.95, text(" Antisymmetric", :left, 10))
+        plot!(combined_plot[2], ylabel=L"R_q", xlabel=L"\tau", 
+              ylims=(-0.05, 1.05), xticks=(x_ticks_vals, x_ticks_labs), top_margin=-1Plots.mm, legend=:topleft)
+        annotate!(combined_plot[2], log_τ_vals[1], 0.95, text("(b)", :left, 10))
 
         x_rep = repeat(log_τ_vals, inner=num_trials)
 
