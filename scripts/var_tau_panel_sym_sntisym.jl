@@ -126,12 +126,12 @@ function run_and_plot_combined_sweep()
         # Painel Superior (Symmetric) - sem título, sem ticks no X (para grudar os gráficos)
         plot!(combined_plot[1], ylabel=L"R_q", ylims=(-0.05, 1.05), 
               xlabel="", xticks=(x_ticks_vals, x_ticks_labs), bottom_margin=-1Plots.mm, legend=false)
-        annotate!(combined_plot[1], log_τ_vals[1], 0.95, text("(a)", :left, 10))
+        annotate!(combined_plot[1], 1.1*log_τ_vals[1], 0.95, text("(a)", :left, 10, fontfamily="Computer Modern"))
 
         # Painel Inferior (Antisymmetric) - sem título
         plot!(combined_plot[2], ylabel=L"R_q", xlabel=L"\tau", 
               ylims=(-0.05, 1.05), xticks=(x_ticks_vals, x_ticks_labs), top_margin=-1Plots.mm, legend=:topleft)
-        annotate!(combined_plot[2], log_τ_vals[1], 0.95, text("(b)", :left, 10))
+        annotate!(combined_plot[2], 1.1*log_τ_vals[1], 0.95, text("(b)", :left, 10, fontfamily="Computer Modern"))
 
         x_rep = repeat(log_τ_vals, inner=num_trials)
 
