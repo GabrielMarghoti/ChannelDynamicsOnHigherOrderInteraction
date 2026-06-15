@@ -56,12 +56,12 @@ end
 
 # 3. Varredura Estocástica e Simulação
 function run_panel_sweep()
-    N_vals = [10, 20, 30, 50]
-    num_trials = 100
+    N_vals = [20, 30, 50, 100]
+    num_trials = 50
     
     K1_fixed = 0.2
     K2_fixed = 20.0
-    τ = 10.0 # Regime de inércia alta
+    τ = 0.01 # Regime de inércia alta
     
     # Tempos estendidos para garantir relaxação com tau=10
     tspan = (0.0, 300.0)
@@ -113,23 +113,26 @@ function run_panel_sweep()
     
     plt = plot(layout=(2, 1), size=(700, 700), link=:x, left_margin=5Plots.mm)
 
-    plot!(plt[1], ylabel=L"R_q", ylims=(-0.05, 1.05), title="(a)", xticks=x_ticks)
-    plot!(plt[2], ylabel=L"R_q", xlabel=L"N", ylims=(-0.05, 1.05), title="(b)", xticks=x_ticks)
+    plot!(plt[1], ylabel=L"R_q", ylims=(-0.05, 1.05), xticks=x_ticks)
+    plot!(plt[2], ylabel=L"R_q", xlabel=L"N", ylims=(-0.05, 1.05), xticks=x_ticks)
 
+    annotate!(plt[1], 8, 0.95, text("(a)", :left, 10, fontfamily="Computer Modern"))
+    annotate!(plt[2], 8, 0.95, text("(b)", :left, 10, fontfamily="Computer Modern"))
     for n_idx in x_indices
         x_rep = fill(n_idx, num_trials)
         
         # Painel Superior (Simétrico)
         violin!(plt[1], x_rep, R1_sym[n_idx, :], side=:left, color=:steelblue, alpha=0.8, width=0.4, linewidth=0, label=(n_idx==1 ? L"R_1" : ""))
         violin!(plt[1], x_rep, R2_sym[n_idx, :], side=:right, color=:forestgreen, alpha=0.8, width=0.4, linewidth=0, label=(n_idx==1 ? L"R_2" : ""))
+
         
         # Painel Inferior (Antissimétrico)
         violin!(plt[2], x_rep, R1_anti[n_idx, :], side=:left, color=:steelblue, alpha=0.8, width=0.4, linewidth=0, label="")
-        violin!(plt[2], x_rep, R2_anti[n_idx, :], side=:right, color=:forestgreen, alpha=0.8, width=0.4, linewidth=0, label="")
+        violin!(plt[2], x_rep, R2_anti[n_idx, :], side=:right, color=:forestgreen, alpha=0.8, width=0.4, linewidth=0, label="")  
     end
     
-    savefig(plt, "figures/painel_distribuicao_sim_anti.png")
-    println("Figura salva: painel_distribuicao_sim_anti.png")
+    savefig(plt, "figures/painel_distribuicao_sim_anti_tau$(τ).png")
+    println("Figura salva: painel_distribuicao_sim_anti_tau$(τ).png")
     return plt
 end
 
