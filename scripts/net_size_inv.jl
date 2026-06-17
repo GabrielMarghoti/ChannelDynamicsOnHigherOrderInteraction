@@ -34,9 +34,12 @@ function dynamic_kuramoto_normalized!(dy, y, p, t)
 end
 
 # 2. Construtor de Rede (Simétrico e Antissimétrico)
-function build_network(N, sym_type)
-    A = ones(Float64, N, N) - I
+function build_network(N::Int, sym_type::Symbol)
+    A = ones(Float64, N, N)
     B = zeros(Float64, N, N, N)
+
+    for i in 1:N; A[i, i] = 0.0; end
+
     for i in 1:N, j in 1:N, k in (j+1):N
         if i != j && i != k
             B[i, j, k] = 1.0
@@ -56,8 +59,8 @@ end
 
 # 3. Varredura Estocástica e Simulação
 function run_panel_sweep()
-    N_vals = [10, 20, 30]#, 50, 100]
-    num_trials = 1000
+    N_vals = [10, 20, 30]
+    num_trials = 100
     
     K1_fixed = 0.2
     K2_fixed = 20.0

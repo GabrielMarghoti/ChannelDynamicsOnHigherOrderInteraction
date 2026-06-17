@@ -63,7 +63,7 @@ end
 function run_and_plot_combined_sweep()
     mkpath(BASE_OUT_DIR)
     
-    N = 30
+    N = 50
     # Resolução moderada para acomodar os violinos sem sobreposição excessiva
     τ_vals = 10.0 .^ [-2, -1.5, -1, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0]#range(-1.1, 2.0, length=10)
     log_τ_vals = log10.(τ_vals)
@@ -159,7 +159,7 @@ function run_and_plot_combined_sweep()
         end
 
         k_label = "K1_$(replace(string(K1), "."=>"p"))_K2_$(replace(string(K2), "."=>"p"))"
-        out_file = joinpath(BASE_OUT_DIR, "tau_sweep_violin_split_$(k_label).png")
+        out_file = joinpath(BASE_OUT_DIR, "tau_sweep_violin_split_N_$(N)_$(k_label).png")
         savefig(combined_plot, out_file)
         println("    [✓] Saved Panel → $out_file")
     end
