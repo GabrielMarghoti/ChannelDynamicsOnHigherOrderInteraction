@@ -6,7 +6,7 @@ using LaTeXStrings
 using StatsPlots
 
 gr()
-default(fontfamily = "Computer Modern", linewidth = 2, grid = false, framestyle = :box)
+default(fontfamily = "Computer Modern", linewidth = 2, grid = false, framestyle = :box, dpi=300)
 
 const BASE_OUT_DIR = "figures/kuramoto_tau_sweep"
 
@@ -69,7 +69,7 @@ function run_and_plot_combined_sweep()
     log_τ_vals = log10.(τ_vals)
     
 
-    K_pairs = [(0.1, 20.0), (0.2, 20.0), (0.5, 0.0)]
+    K_pairs = [(0.2, 20.0), (0.5, 0.0)]
     tspan = (0.0, 500.0)
     t_eq  = 300.0
     seed  = 42
@@ -126,13 +126,13 @@ function run_and_plot_combined_sweep()
 
         # Painel Superior (Symmetric) - sem título, sem ticks no X (para grudar os gráficos)
         plot!(combined_plot[1], ylabel=L"R_q", ylims=(-0.05, 1.05), 
-              xlabel="", xticks=(x_ticks_vals, x_ticks_labs), bottom_margin=-1Plots.mm, legend=false)
-        annotate!(combined_plot[1], -2.5, 0.95, text("(a)", :left, 10, fontfamily="Computer Modern"))
+              xlabel="", xticks=(x_ticks_vals, x_ticks_labs), bottom_margin=-2Plots.mm, legend=false)
+        annotate!(combined_plot[1], -2.2, 0.95, text("(a)", :left, font("Computer Modern", 10)))
 
         # Painel Inferior (Antisymmetric) - sem título
         plot!(combined_plot[2], ylabel=L"R_q", xlabel=L"\tau", 
               ylims=(-0.05, 1.05), xticks=(x_ticks_vals, x_ticks_labs), top_margin=-1Plots.mm, legend=:topleft)
-        annotate!(combined_plot[2], -2.5, 0.95, text("(b)", :left, 10, fontfamily="Computer Modern"))
+        annotate!(combined_plot[2], -1.4, 0.95, text("(b)", :left, font("Computer Modern", 10)))
 
         x_rep = repeat(log_τ_vals, inner=num_trials)
 
@@ -142,9 +142,9 @@ function run_and_plot_combined_sweep()
             
             # width=0.15 restringe a amplitude e impede sobreposição no eixo X contínuo
             violin!(combined_plot[p_idx], x_rep, y_r1, side=:left, color=c_R1, alpha=0.9, 
-                    width=0.15, label=p_idx==1 ? L"R_1" : "")
+                    width=0.15, label=p_idx==2 ? L"R_1" : "")
             violin!(combined_plot[p_idx], x_rep, y_r2, side=:right, color=c_R2, alpha=0.9, 
-                    width=0.15, label=p_idx==1 ? L"R_2" : "")
+                    width=0.15, label=p_idx==2 ? L"R_2" : "")
             
             # Boxplots (se for usá-los, ajuste também o width)
             #boxplot!(combined_plot[p_idx], x_rep, y_r1, side=:left, color=c_R1, fillalpha=0.6, width=0.04, whisker_range=Inf, outliers=false, label="")
